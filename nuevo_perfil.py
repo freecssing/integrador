@@ -1,7 +1,7 @@
 from PIL import Image, ImageDraw
 import json
 import io
-import PySimpleGUI as psg
+import PySimpleGUI as sg
 
 
 def convertir_a_bytes(file_or_bytes, resize=None):
@@ -20,7 +20,7 @@ image.save('test.png')
 
 img_bytes = convertir_a_bytes('test.png')
 
-imagen = psg.Image(data = img_bytes, size=(250,250))
+imagen = sg.Image(data = img_bytes, size=(250,250))
 
 datos = {}
 
@@ -32,10 +32,11 @@ def verificar_existe(alias):
            lista = json.load(archivo)
        for diccionario in lista:
            if 'alias' in diccionario and diccionario['alias'] == alias:
+              sg.popup('El alias ingresado ya existe, ingrese otro')
               return True
        return False 
-    except:
-       return False 
+    except FileNotFoundError:
+       return False
 
 def verificar_numero(valor):
     # Comprueba si el valor es un número
@@ -43,41 +44,72 @@ def verificar_numero(valor):
         return True
     else:
         # Muestra un popup de aviso si el valor no es un número
+        sg.popup('El alias ingresado ya existe, ingrese otro')
         return False
+    
+def verificar(datos):
+   if(not (verificar_existe(datos['alias'])) and verificar_numero(datos['edad'])):
+      return True 
+   else:
+      return False
+    
+
+def tiene_imagen(datos):
+   if('imagen' in datos.keys()):
+      return True
+   else:
+      return False
 
 def popup_get_file(message, title=None):
    #Crea una ventana popup que busca una imagen
 
     layout = [
-        [psg.Text(message)],
-        [psg.Input(key='-INPUT-'), psg.FilesBrowse('Navegar', key="imagen", file_types=[("GIF files", "*.gif"), ("PNG files", "*.png"), ("JPG files", "*.jpg"), ("JPEG files", "*.jpeg")])],
-        [psg.Button('Ok'), psg.Button('Cancelar')],
+        [sg.Text(message)],
+        [sg.Input(key='-INPUT-'), sg.FilesBrowse('Navegar', key="imagen", file_types=[("PNG files", "*.png"), ("JPG files", "*.jpg"), ("JPEG files", "*.jpeg")])],
+        [sg.Button('Ok'), sg.Button('Cancelar')],
     ]
-    window = psg.Window(title if title else message, layout)
+    window = sg.Window(title if title else message, layout)
     event, values = window.read(close=True)
     if event == 'Ok':
         datos['imagen'] = values['imagen']
+        print(datos['imagen'])
         return datos
     else:
         return None
+    
+def guardar_json(datos):
+   """
+      Guarda en usuarios.json los datos del usuario ingresado
+   """
+   try:
+     with open('usuarios.json', 'r+') as archivo:
+         data = json.load(archivo)
+         data.append(datos)
+         archivo.seek(0)
+         json.dumps(data, ensure_ascii=False, indent=2)
+         json.dump(data, archivo)
+   except FileNotFoundError:
+      with open('usuarios.json', 'x') as archivo:
+         json.dumps(datos, ensure_ascii=False, indent=2)
+         json.dump([datos], archivo)
 
 
-columma_izquierda = psg.Column(layout=[[psg.Text(text="Nuevo perfil", font=("Arial", 20), size=15, expand_x=True, justification='left')],
-                                [psg.Text(text="Nick o Alias: ", font=("Arial", 15), size=15, expand_x=True, justification='left')],
-                                [psg.Input(key='alias')],
-                                [psg.Text(text="Nombre: ", font=("Arial", 15), size=15, expand_x=True, justification='left')],
-                                [psg.Input(key='nombre')],
-                                [psg.Text(text="Edad: ", font=("Arial", 20), size=15, expand_x=True, justification='left')],
-                                [psg.Input(key='edad')],
-                                [psg.Text(text="Genero autopercibido: ", font=("Arial", 20), size=15, expand_x=True, justification='left')],
-                                [psg.OptionMenu(values=('Masculino', 'Femenino'),  k='genero')],
-                                [psg.Checkbox('Otro', default=False,key='otro', enable_events=True)],
-                                [psg.Text(text="Que otro:", font=("Arial", 20), size=15, expand_x=True, justification='left', key='-OTRO-', visible=False)],
-                                [psg.Input(key='otro_genero', visible=False)],
-                                [psg.B('Guardar')]], justification = 'left')
+columma_izquierda = sg.Column(layout=[[sg.Text(text="Nuevo perfil", font=("Arial", 20), size=15, expand_x=True, justification='left')],
+                                [sg.Text(text="Nick o Alias: ", font=("Arial", 15), size=15, expand_x=True, justification='left')],
+                                [sg.Input(key='alias')],
+                                [sg.Text(text="Nombre: ", font=("Arial", 15), size=15, expand_x=True, justification='left')],
+                                [sg.Input(key='nombre')],
+                                [sg.Text(text="Edad: ", font=("Arial", 20), size=15, expand_x=True, justification='left')],
+                                [sg.Input(key='edad')],
+                                [sg.Text(text="Genero autopercibido: ", font=("Arial", 20), size=15, expand_x=True, justification='left')],
+                                [sg.OptionMenu(values=('Masculino', 'Femenino'),  k='genero')],
+                                [sg.Checkbox('Otro', default=False,key='otro', enable_events=True)],
+                                [sg.Text(text="Que otro:", font=("Arial", 20), size=15, expand_x=True, justification='left', key='-OTRO-', visible=False)],
+                                [sg.Input(key='otro_genero', visible=False)],
+                                [sg.B('Guardar')]], justification = 'left')
 
-columna_derecha = psg.Column(layout = [[imagen], 
-                  [psg.Button('Cargar imagen', size=(30, 2))]], justification='right')
+columna_derecha = sg.Column(layout = [[imagen], 
+                  [sg.Button('Cargar imagen', size=(30, 2))]], justification='right')
 
 
 
@@ -90,30 +122,33 @@ layout = [
 
 si = False
 
-window = psg.Window('crear usuario', layout, size=(1024, 720))
+window = sg.Window('crear usuario', layout, size=(1024, 720))
 while True:
    event, values = window.read()
    print(event, values)
    if event in (None, 'Exit'):
       break
    if event == 'Guardar':
-      if verificar_existe(values['alias']):
-          psg.popup('El alias ingresado ya existe, ingrese otro')
-      if verificar_numero(values['edad']):
-          datos = values
-      else:
-          psg.popup('La edad ingresada no es un número')     
-      if values['otro']:
-          datos['genero'] = values['otro_genero']
-      del datos['otro_genero']
+      if verificar(values):        
+          if values['otro']:
+             print('watatatataq')
+             values['genero'] = values['otro_genero']   
+          del values['otro_genero']
+          del values['otro']
+          datos.update(values) 
+          if(tiene_imagen(datos)):
+             guardar_json(datos)
+             break
+          else:
+             events_popup, values_popup = sg.popup('Ingrese una imagen')   
    if event == 'otro': 
       si = not si
       window['-OTRO-'].update(visible = si)
       window['otro_genero'].update(visible=si)
    if event == 'Cargar imagen':
        # ahora nos permite seleccionar la foto
-       datos = popup_get_file('Seleccionar imagen')
-       if datos['imagen']:
+       datos_img = popup_get_file('Seleccionar imagen')
+       if datos_img['imagen']:
            # modificaciones a la imagen
            image = Image.open(datos['imagen']).convert('RGB')
            image.thumbnail((250, 250))
@@ -125,17 +160,6 @@ window.close()
 
 
 
-del datos['otro']
+
 print(datos)
 
-try:
-  with open('usuarios.json', 'r+') as archivo:
-      data = json.load(archivo)
-      data.append(datos)
-      archivo.seek(0)
-      json.dumps(data, ensure_ascii=False, indent=2)
-      json.dump(data, archivo)
-except FileNotFoundError:
-   with open('usuarios.json', 'x') as archivo:
-      json.dumps(datos, ensure_ascii=False, indent=2)
-      json.dump([datos], archivo)
